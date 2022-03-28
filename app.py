@@ -4,8 +4,9 @@ import bottle
 from bottle import get, post, static_file, request, route, template
 from bottle import SimpleTemplate
 from configparser import ConfigParser
-from ldap3 import Connection, Server
-from ldap3 import SIMPLE, SUBTREE
+import ssl
+from ldap3 import Connection, Server, Tls
+from ldap3 import SIMPLE, SUBTREE, AUTO_BIND_NO_TLS, AUTO_BIND_TLS_BEFORE_BIND
 from ldap3.core.exceptions import LDAPBindError, LDAPConstraintViolationResult, \
     LDAPInvalidCredentialsResult, LDAPUserNameIsMandatoryError, \
     LDAPSocketOpenError, LDAPExceptionError
@@ -59,9 +60,11 @@ def index_tpl(**kwargs):
 
 
 def connect_ldap(conf, **kwargs):
+    tls_configuration = Tls(validate=ssl.CERT_NONE, version=ssl.PROTOCOL_TLSv1_2)
     server = Server(host=conf['host'],
                     port=conf.getint('port', None),
                     use_ssl=conf.getboolean('use_ssl', False),
+                    tls=tls_configuration,
                     connect_timeout=5)
 
     return Connection(server, raise_exceptions=True, **kwargs)
@@ -117,6 +120,7 @@ def change_password_ldap(conf, username, old_pass, new_pass):
 
     # Note: raises LDAPUserNameIsMandatoryError when user_dn is None.
     with connect_ldap(conf, authentication=SIMPLE, user=user_dn, password=old_pass) as c:
+        c.start_tls()
         c.bind()
         c.extend.standard.modify_password(user_dn, old_pass, new_pass)
 
